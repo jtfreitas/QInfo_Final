@@ -1,6 +1,8 @@
 import tensornetwork as tn
 import tensorflow as tf
+from functools import reduce
 
+tn.set_default_backend('tensorflow')
 class MPSLayer(tf.keras.layers.Layer):
 
     def __init__(self, MPO, activation_function):
@@ -30,5 +32,5 @@ class MPSLayer(tf.keras.layers.Layer):
 
         result = tf.vectorized_map(
             lambda vec: f(vec, self.MPO, self.bias), inputs)
-        return self.activation(tf.reshape(result, (-1, 12288))) #perform activation
+        return self.activation(tf.reshape(result, (-1, reduce((lambda x,y : x*y), MPO.shape[:self.rank//2])))) #perform activation
         

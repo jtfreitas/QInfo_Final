@@ -17,7 +17,7 @@ class MPSLayer(tf.keras.layers.Layer):
     def call(self, inputs):
         def f(input_vec, MPO, bias):
             
-            rank = tf.rank(MPO).numpy
+            rank = tf.rank(MPO).numpy()
             
             input_vec = tf.reshape(input_vec, tuple(MPO.shape[rank//2:]))
             

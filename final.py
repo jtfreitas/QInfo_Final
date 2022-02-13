@@ -1,7 +1,7 @@
 import tensornetwork as tn
 import tensorflow as tf
 
-class MPSLayer(tf.keras.layers.layer):
+class MPSLayer(tf.keras.layers.Layer):
 
     def __init__(self, MPO, activation_function):
         super(MPSLayer, self).__init__()

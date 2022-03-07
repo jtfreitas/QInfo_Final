@@ -3,11 +3,15 @@ from scipy.special import binom
 from scipy.optimize import curve_fit
 from scipy.stats import multivariate_normal as mv_norm
 import tensornetwork as tn
+from tensornetwork.tn_keras.layers import Conv2DMPO, DenseMPO, DenseDecomp
 import tensorflow as tf
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.callbacks import ModelCheckpoint
 from sklearn.model_selection import train_test_split
-
+from tensorflow.keras import initializers, regularizers, optimizers, Input
+from tensorflow.keras.layers import Dense,MaxPooling2D,Conv2D,Dropout,Flatten, AveragePooling2D
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
 import numpy as np
 import pandas as pd
 
@@ -23,6 +27,17 @@ class TN_Toy(tf.keras.layers.Layer):
         self.mps2 = tf.Variable(tf.random.normal((d,bond_dim, 2), stddev=1/2/bond_dim/d), trainable=True, name='mps2')
         self.bias = tf.Variable(tf.random.normal((2,), stddev = 1/2), trainable=True, name='bias')
         self.bond_dim = bond_dim
+    
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({'mps1': self.mps1.numpy,
+                    'mps2': self.mps2.numpy,
+                    'bias' : self.bias.numpy,
+                    'bon_dim' : self.bond_dim,
+                    'name' : self.name
+                    })
+        return config
+
     def call(self, inputs):
         def f(in_tensor, mps1, mps2, bias):
             """
@@ -41,25 +56,26 @@ class TN_Toy(tf.keras.layers.Layer):
 
 class MNIST_TN(tf.keras.layers.Layer):
 
-    def __init__(self, bond_dim):
-        super(MNIST_TN, self).__init__()
+    def __init__(self, bond_dim, **kwargs):
+        super().__init__(**kwargs)
     # Create the variables for the layer.
-        self.a_var = tf.Variable(tf.random.normal(shape=(16,12,bond_dim),
+        self.a_var = tf.Variable(tf.random.normal(shape=(16,16,bond_dim),
                                                 stddev=1.0/32.0),
                                 name="a", trainable=True)
-        self.b_var = tf.Variable(tf.random.normal(shape=(16,336,bond_dim),
+        self.b_var = tf.Variable(tf.random.normal(shape=(16,63,bond_dim),
                                                 stddev=1.0/32.0),
                                 name="b", trainable=True)
         self.bias = tf.Variable(tf.zeros(shape=(16,16)),
                             name="bias", trainable=True)
         self.bond_dim = bond_dim
-
+        
     def get_config(self):
         config = super().get_config().copy()
-        config.update({'a_var': self.a_var,
-                    'b_var': self.b_var,
-                    'bias' : self.bias,
+        config.update({'a_var': self.a_var.numpy,
+                    'b_var': self.b_var.numpy,
+                    'bias' : self.bias.numpy,
                     'bon_dim' : self.bond_dim,
+                    'name' : self.name
                     })
         return config
 
@@ -69,7 +85,7 @@ class MNIST_TN(tf.keras.layers.Layer):
     # tf.vectorized_map (see below).
         def f(input_vec, a_var, b_var, bias_var):
             # Reshape to a matrix instead of a vector.
-            input_vec = tf.reshape(input_vec, (12,336))
+            input_vec = tf.reshape(input_vec, (16,63))
 
             result = tn.ncon([input_vec, a_var, b_var], [[1,2], [-1, 1, 3], [-2, 2, 3]])
             return result + bias_var
@@ -80,6 +96,92 @@ class MNIST_TN(tf.keras.layers.Layer):
         result = tf.vectorized_map(
             lambda vec: f(vec, self.a_var, self.b_var, self.bias), inputs)
         return tf.nn.relu(tf.reshape(result, (-1, 16**2)))
+
+
+class fruit_TN1(tf.keras.layers.Layer):
+
+    def __init__(self, bond_dim, **kwargs):
+        super().__init__(**kwargs)
+          # Create the variables for the layer.
+        self.a_var = tf.Variable(tf.random.normal(shape=(4, 24, bond_dim),stddev=1.0/16.0),
+                    name="a",
+                    trainable=True)
+        self.b_var = tf.Variable(tf.random.normal(shape=(4, 256, bond_dim, bond_dim), stddev=1.0/16.0),
+                    name="b",
+                    trainable=True)
+        self.c_var = tf.Variable(tf.random.normal(shape=(4, 24, bond_dim), stddev=1.0/16.0),
+                    name="c",
+                    trainable=True)
+        self.bias = tf.Variable(tf.zeros(shape=(4,4,4)),
+                    name="bias",
+                    trainable=True)
+        self.bond_dim = bond_dim
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({'a_var': self.a_var.numpy,
+                    'b_var': self.b_var.numpy,
+                    'c_var': self.c_var.numpy,
+                    'bias' : self.bias.numpy,
+                    'bond_dim' : self.bond_dim,
+                    'name' : self.name
+                    })
+        return config
+
+    def call(self, inputs):
+      def f(input_vec, a_var, b_var, c_var, bias_var):
+        result = tn.ncon([input_vec, a_var, b_var, c_var], [[1, 2, 3], [-1, 1, 4], [-2, 3, 4, 5], [-3, 2, 5]]) 
+        return result + bias_var
+  
+          # To deal with a batch of items, we can use the tf.vectorized_map
+          # function.
+          # https://www.tensorflow.org/api_docs/python/tf/vectorized_map
+      result = tf.vectorized_map(
+        lambda vec: f(vec, self.a_var, self.b_var, self.c_var, self.bias), inputs
+      )
+      return tf.nn.relu(tf.reshape(result, (-1,64)))
+
+class fruit_TN2(tf.keras.layers.Layer):
+
+    def __init__(self, bond_dim, **kwargs):
+        super().__init__(**kwargs)
+          # Create the variables for the layer.
+        self.a_var = tf.Variable(tf.random.normal(shape=(4, bond_dim),stddev=1.0/16.0),
+                    name="a",
+                    trainable=True)
+        self.b_var = tf.Variable(tf.random.normal(shape=(131, 4, bond_dim, bond_dim), stddev=1.0/16.0),
+                    name="b",
+                    trainable=True)
+        self.c_var = tf.Variable(tf.random.normal(shape=(4, bond_dim), stddev=1.0/16.0),
+                    name="c",
+                    trainable=True)
+        self.bias = tf.Variable(tf.zeros(shape=(131)),
+                    name="bias",
+                    trainable=True)
+        self.bond_dim = bond_dim
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({'a': self.a_var.numpy,
+                    'b': self.b_var.numpy,
+                    'c': self.c_var.numpy,
+                    'bias' : self.bias.numpy,
+                    'bond_dim' : self.bond_dim,
+                    'name' : self.name
+                    })
+        return config
+
+    def call(self, inputs):
+      def f(input_vec, a_var, b_var, c_var, bias_var):
+        input_vec = tf.reshape(input_vec,(4,4,4))
+        result = tn.ncon([input_vec, a_var, b_var, c_var], [[1, 2, 3], [1, 4], [-1, 2, 4, 5], [3, 5]]) 
+        return result + bias_var
+  
+          # To deal with a batch of items, we can use the tf.vectorized_map
+          # function.
+          # https://www.tensorflow.org/api_docs/python/tf/vectorized_map
+      result = tf.vectorized_map(
+        lambda vec: f(vec, self.a_var, self.b_var, self.c_var, self.bias), inputs
+      )
+      return tf.nn.softmax(tf.reshape(result, (-1,131)))
 
 
 def feat_map(x_j, d):
@@ -161,7 +263,7 @@ def fmap(d, x_train, x_test, labels_train, labels_test):
     y_htrain, y_htest = tf.one_hot(labels_train, 2), tf.one_hot(labels_test,2)
     return x_ftrain, y_htrain, x_ftest, y_htest
 
-def plot_loss_acc(fit_history, starting_epoch=1, **kwargs):
+def plot_loss_acc(fit_history, starting_epoch=1, fontsize=20, **kwargs):
 
     no_rows = len(fit_history.keys())//2
     fig, axs = plt.subplots(no_rows,1, **kwargs)
@@ -179,14 +281,14 @@ def plot_loss_acc(fit_history, starting_epoch=1, **kwargs):
             else:
                 axs[1].plot(range(1, len(fit_history[key][starting_epoch-1:])+1), fit_history[key][starting_epoch-1:], label='_Training set')
 
-    axs[0].set_title("Precision",fontsize=20, loc='left')
-    axs[1].set_title("Loss",fontsize=20, loc='left')
+    axs[0].set_title("Precision",fontsize=fontsize, loc='left')
+    axs[1].set_title("Loss",fontsize=fontsize, loc='left')
     for ax in axs:
         ax.grid()
         ax.set_xlim(0, len(fit_history[key][starting_epoch-1:])+1)
-    fig.suptitle("Training timeline", fontsize=24)
+    fig.suptitle("Training timeline", fontsize=fontsize+4)
 
-    fig.legend(loc='upper right', fontsize=16)
+    fig.legend(loc='upper right', fontsize=fontsize-4)
     return fig
 
 def build_model(d, bond_dim, opt, loss='binary_crossentropy', metrics_list = ['Precision'], show_summary=False, batch_size=16):
@@ -257,3 +359,18 @@ def decision_contours(d_list, m_list, x_train, x_test, labels_train, labels_test
         return fig, axs
     else:
         raise TypeError("Expected lists for d and bond dimensions.")
+
+
+
+def show_conf_matrix(conf_matrix_val, plot_title, **kwargs):
+####### UPDATE THIS
+    fig, axs = plt.subplots(1,1, **kwargs)
+    fig.suptitle('Confusion matrices')
+  
+    sns.heatmap(conf_matrix_val, cmap = ('Blues'), annot = True, fmt = 'd', ax = axs, cbar=False)
+    axs.set_title(plot_title)
+  
+    axs.tick_params(which='both', bottom=False, left = False)
+    axs.set_xlabel('Predicted labels')
+    axs.set_ylabel('True labels')# Confusion matrices framework 
+    return fig, axs

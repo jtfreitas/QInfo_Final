@@ -13,7 +13,8 @@ from tensorflow.keras.layers import Dense,MaxPooling2D,Conv2D,Dropout,Flatten, A
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import numpy as np
-import pandas as pd
+import os
+import json
 
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -103,13 +104,13 @@ class fruit_TN1(tf.keras.layers.Layer):
     def __init__(self, bond_dim, **kwargs):
         super().__init__(**kwargs)
           # Create the variables for the layer.
-        self.a_var = tf.Variable(tf.random.normal(shape=(4, 24, bond_dim),stddev=1.0/16.0),
+        self.a_var = tf.Variable(tf.random.normal(shape=(4, 11, bond_dim),stddev=1.0/16.0),
                     name="a",
                     trainable=True)
         self.b_var = tf.Variable(tf.random.normal(shape=(4, 256, bond_dim, bond_dim), stddev=1.0/16.0),
                     name="b",
                     trainable=True)
-        self.c_var = tf.Variable(tf.random.normal(shape=(4, 24, bond_dim), stddev=1.0/16.0),
+        self.c_var = tf.Variable(tf.random.normal(shape=(4, 11, bond_dim), stddev=1.0/16.0),
                     name="c",
                     trainable=True)
         self.bias = tf.Variable(tf.zeros(shape=(4,4,4)),
@@ -365,7 +366,7 @@ def decision_contours(d_list, m_list, x_train, x_test, labels_train, labels_test
 def show_conf_matrix(conf_matrix_val, plot_title, **kwargs):
 ####### UPDATE THIS
     fig, axs = plt.subplots(1,1, **kwargs)
-    fig.suptitle('Confusion matrices')
+    fig.suptitle('Confusion matrix')
   
     sns.heatmap(conf_matrix_val, cmap = ('Blues'), annot = True, fmt = 'd', ax = axs, cbar=False)
     axs.set_title(plot_title)
@@ -374,3 +375,39 @@ def show_conf_matrix(conf_matrix_val, plot_title, **kwargs):
     axs.set_xlabel('Predicted labels')
     axs.set_ylabel('True labels')# Confusion matrices framework 
     return fig, axs
+
+
+def load_fruits_dataset(train_dir, test_dir, validation_split, batch_size, img_height, img_width):
+    train_ds = tf.keras.utils.image_dataset_from_directory(
+        train_dir,
+        labels = 'inferred',
+        label_mode='categorical',
+        color_mode = 'rgb',
+        validation_split= validation_split,
+        subset = 'training',
+        seed=123,
+        image_size=(img_height, img_width),
+        batch_size=batch_size)
+
+    val_ds = tf.keras.utils.image_dataset_from_directory(
+        train_dir,
+        labels = 'inferred',
+        label_mode='categorical',
+        color_mode = 'rgb',
+        validation_split=validation_split,
+        subset = 'validation',
+        seed=123,
+        image_size=(img_height, img_width),
+        batch_size=batch_size)
+
+    print('\nTest data:')
+    test_ds = tf.keras.utils.image_dataset_from_directory(
+        test_dir,
+        labels = 'inferred',
+        label_mode='categorical',
+        color_mode = 'rgb',
+        seed=123,
+        image_size=(img_height, img_width),
+        batch_size=batch_size)
+
+    return train_ds, val_ds, test_ds

@@ -31,9 +31,9 @@ class TN_Toy(tf.keras.layers.Layer):
     
     def get_config(self):
         config = super().get_config().copy()
-        config.update({'mps1': self.mps1.numpy,
-                    'mps2': self.mps2.numpy,
-                    'bias' : self.bias.numpy,
+        config.update({'mps1': self.mps1.numpy(),
+                    'mps2': self.mps2.numpy(),
+                    'bias' : self.bias.numpy(),
                     'bon_dim' : self.bond_dim,
                     'name' : self.name
                     })
@@ -72,9 +72,9 @@ class MNIST_TN(tf.keras.layers.Layer):
         
     def get_config(self):
         config = super().get_config().copy()
-        config.update({'a_var': self.a_var.numpy,
-                    'b_var': self.b_var.numpy,
-                    'bias' : self.bias.numpy,
+        config.update({'a_var': self.a_var.numpy(),
+                    'b_var': self.b_var.numpy(),
+                    'bias' : self.bias.numpy(),
                     'bon_dim' : self.bond_dim,
                     'name' : self.name
                     })
@@ -119,23 +119,22 @@ class fruit_TN1(tf.keras.layers.Layer):
         self.bond_dim = bond_dim
     def get_config(self):
         config = super().get_config().copy()
-        config.update({'a_var': self.a_var.numpy,
-                    'b_var': self.b_var.numpy,
-                    'c_var': self.c_var.numpy,
-                    'bias' : self.bias.numpy,
+        config.update({'a_var': self.a_var.numpy(),
+                    'b_var': self.b_var.numpy(),
+                    'c_var': self.c_var.numpy(),
+                    'bias' : self.bias.numpy(),
                     'bond_dim' : self.bond_dim,
                     'name' : self.name
                     })
         return config
 
     def call(self, inputs):
+      
+      
       def f(input_vec, a_var, b_var, c_var, bias_var):
         result = tn.ncon([input_vec, a_var, b_var, c_var], [[1, 2, 3], [-1, 1, 4], [-2, 3, 4, 5], [-3, 2, 5]]) 
         return result + bias_var
-  
-          # To deal with a batch of items, we can use the tf.vectorized_map
-          # function.
-          # https://www.tensorflow.org/api_docs/python/tf/vectorized_map
+
       result = tf.vectorized_map(
         lambda vec: f(vec, self.a_var, self.b_var, self.c_var, self.bias), inputs
       )
@@ -161,10 +160,10 @@ class fruit_TN2(tf.keras.layers.Layer):
         self.bond_dim = bond_dim
     def get_config(self):
         config = super().get_config().copy()
-        config.update({'a': self.a_var.numpy,
-                    'b': self.b_var.numpy,
-                    'c': self.c_var.numpy,
-                    'bias' : self.bias.numpy,
+        config.update({'a': self.a_var.numpy(),
+                    'b': self.b_var.numpy(),
+                    'c': self.c_var.numpy(),
+                    'bias' : self.bias.numpy(),
                     'bond_dim' : self.bond_dim,
                     'name' : self.name
                     })
@@ -266,11 +265,10 @@ def fmap(d, x_train, x_test, labels_train, labels_test):
 
 def plot_loss_acc(fit_history, starting_epoch=1, fontsize=20, **kwargs):
 
-    no_rows = len(fit_history.keys())//2
-    fig, axs = plt.subplots(no_rows,1, **kwargs)
+    fig, axs = plt.subplots(2,1, **kwargs)
 
     for key in fit_history.keys():
-        if 'prec' in key:
+        if ('Prec' in key) or ('prec' in key):
             if 'val' in key:
                 axs[0].plot(range(1, len(fit_history[key][starting_epoch-1:])+1), fit_history[key][starting_epoch-1:], label='Validation set')
             else:
@@ -309,7 +307,7 @@ def decision_contour(tnetwork, x_test, labels_test, **kwargs):
     region = unit_sq.T.reshape(unit_sq.shape[1]*unit_sq.shape[2], 2)
 
     sq_feat = np.array([np.outer(feat_map(region[i,0], tnetwork.d), feat_map(region[i,1], tnetwork.d)) for i, _ in enumerate(region)])
-    pred_logits = tnetwork.predict(sq_feat, batch_size=len(sq_feat))
+    pred_logits = tnetwork.predict(sq_feat, batch_size=len(sq_feat), steps_per_epoch=100)
     pred_labels = np.array([np.argmax(label) for label in pred_logits])
 
     fig = plt.figure(**kwargs)
@@ -325,7 +323,7 @@ def decision_contour(tnetwork, x_test, labels_test, **kwargs):
     fig.suptitle(f"Decision boundary on test set, $(d,m) = ({tnetwork.d}, {tnetwork.bond_dim})$", ha='center')
     return fig, ax
 
-def decision_contours(d_list, m_list, x_train, x_test, labels_train, labels_test, **kwargs):
+def decision_contours(d_list, m_list, x_train, x_test, labels_train, labels_test, n_epochs=10, **kwargs):
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
     if (type(d_list) == list) and (type(m_list) == list):
@@ -334,16 +332,20 @@ def decision_contours(d_list, m_list, x_train, x_test, labels_train, labels_test
         region = unit_sq.T.reshape(unit_sq.shape[1]*unit_sq.shape[2], 2)
         for i, d in enumerate(d_list):
             x_ftrain, y_htrain, x_ftest, y_htest = fmap(d, x_train, x_test, labels_train, labels_test)
+            toy_train_ds = tf.data.Dataset.from_tensor_slices((x_ftrain, y_htrain)).shuffle(100).batch(16)
+            toy_test_ds = tf.data.Dataset.from_tensor_slices((x_ftest, y_htest)).shuffle(100).batch(16)
+
             sq_feat = np.array([np.outer(feat_map(region[k,0], d), feat_map(region[k,1], d)) for k, _ in enumerate(region)])
+            sq_feat_ds = tf.data.Dataset.from_tensor_slices(sq_feat).batch(16)
             for j, bond_dim in enumerate(m_list):
-                tnetwork = build_model(d, bond_dim, 'SGD', show_summary=False, batch_size=16)
-                tnetwork.fit(x_ftrain, y_htrain, validation_split=0.2, epochs=50, verbose=0, shuffle=True)
+                tnetwork = build_model(d, bond_dim, 'SGD', show_summary=False, batch_size=None)
+                tnetwork.fit(toy_train_ds, epochs=n_epochs, verbose=0, shuffle=True)
                 #plotting history
-                _, test_precision = tnetwork.evaluate(x_ftest, y_htest, batch_size=16, verbose=0)
+                _, test_precision = tnetwork.evaluate(toy_test_ds, verbose=0)
                 print(f'Model achieved {test_precision*100:.3f}% precision on the test set.')
 
-                pred_logits = tnetwork.predict(sq_feat, batch_size=len(sq_feat))
-                pred_labels = np.array([np.argmax(label) for label in pred_logits])
+                pred_logits = tnetwork.predict(sq_feat_ds)
+                pred_labels = np.argmax(pred_logits, axis=1)
                 sc1 = axs[i,j].scatter(*x_test[labels_test==1].T, cmap="Paired", label="$y_i=1$", marker='.', color=(0.9921568627450981, 0.7490196078431373, 0.43529411764705883))
                 sc2 = axs[i,j].scatter(*x_test[labels_test==0].T, cmap="Paired", label="$y_i=0$", marker='.', color=(0.6509803921568628, 0.807843137254902, 0.8901960784313725))
                 axs[i,j].contourf(*unit_sq, pred_labels.reshape(*unit_sq.shape[1:]).T, cmap="Paired", alpha=0.3)
@@ -375,7 +377,6 @@ def show_conf_matrix(conf_matrix_val, plot_title, **kwargs):
     axs.set_xlabel('Predicted labels')
     axs.set_ylabel('True labels')# Confusion matrices framework 
     return fig, axs
-
 
 def load_fruits_dataset(train_dir, test_dir, validation_split, batch_size, img_height, img_width):
     train_ds = tf.keras.utils.image_dataset_from_directory(

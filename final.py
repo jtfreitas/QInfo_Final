@@ -342,7 +342,6 @@ def decision_contours(d_list, m_list, x_train, x_test, labels_train, labels_test
                 tnetwork.fit(toy_train_ds, epochs=n_epochs, verbose=0, shuffle=True)
                 #plotting history
                 _, test_precision = tnetwork.evaluate(toy_test_ds, verbose=0)
-                print(f'Model achieved {test_precision*100:.3f}% precision on the test set.')
 
                 pred_logits = tnetwork.predict(sq_feat_ds)
                 pred_labels = np.argmax(pred_logits, axis=1)
@@ -356,14 +355,12 @@ def decision_contours(d_list, m_list, x_train, x_test, labels_train, labels_test
                 axs[i,j].set_yticks([0,1])
                 axs[i,j].tick_params(length=0)
 
-                axs[i,j].set_title(f"$(d,m) = ({tnetwork.d}, {tnetwork.bond_dim})$", ha='center')
+                axs[i,j].set_title(f"$(d,m) = ({tnetwork.d}, {tnetwork.bond_dim})$, Score: ${test_precision*100:.2f}%$", loc='left')
         fig.suptitle('Decision boundaries', fontsize=25)
         fig.legend(handles = [sc1, sc2])
         return fig, axs
     else:
         raise TypeError("Expected lists for d and bond dimensions.")
-
-
 
 def show_conf_matrix(conf_matrix_val, plot_title, **kwargs):
 ####### UPDATE THIS

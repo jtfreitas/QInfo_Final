@@ -19,6 +19,7 @@ import json
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 tn.set_default_backend('tensorflow')
 
 class TN_Toy(tf.keras.layers.Layer):
@@ -60,13 +61,13 @@ class MNIST_TN(tf.keras.layers.Layer):
     def __init__(self, bond_dim, **kwargs):
         super().__init__(**kwargs)
     # Create the variables for the layer.
-        self.a_var = tf.Variable(tf.random.normal(shape=(16,16,bond_dim),
+        self.a_var = tf.Variable(tf.random.normal(shape=(16,bond_dim),
                                                 stddev=1.0/32.0),
                                 name="a", trainable=True)
-        self.b_var = tf.Variable(tf.random.normal(shape=(16,63,bond_dim),
+        self.b_var = tf.Variable(tf.random.normal(shape=(10,63,bond_dim),
                                                 stddev=1.0/32.0),
                                 name="b", trainable=True)
-        self.bias = tf.Variable(tf.zeros(shape=(16,16)),
+        self.bias = tf.Variable(tf.zeros(shape=(10,)),
                             name="bias", trainable=True)
         self.bond_dim = bond_dim
         
@@ -88,7 +89,7 @@ class MNIST_TN(tf.keras.layers.Layer):
             # Reshape to a matrix instead of a vector.
             input_vec = tf.reshape(input_vec, (16,63))
 
-            result = tn.ncon([input_vec, a_var, b_var], [[1,2], [-1, 1, 3], [-2, 2, 3]])
+            result = tn.ncon([input_vec, a_var, b_var], [[1,2], [1, 3], [-2, 2, 3]])
             return result + bias_var
 
     # To deal with a batch of items, we can use the tf.vectorized_map
@@ -96,7 +97,7 @@ class MNIST_TN(tf.keras.layers.Layer):
     # https://www.tensorflow.org/api_docs/python/tf/vectorized_map
         result = tf.vectorized_map(
             lambda vec: f(vec, self.a_var, self.b_var, self.bias), inputs)
-        return tf.nn.relu(tf.reshape(result, (-1, 16**2)))
+        return tf.nn.softmax(tf.reshape(result, (-1, 10)))
 
 
 class fruit_TN1(tf.keras.layers.Layer):
@@ -131,14 +132,14 @@ class fruit_TN1(tf.keras.layers.Layer):
     def call(self, inputs):
       
       
-      def f(input_vec, a_var, b_var, c_var, bias_var):
-        result = tn.ncon([input_vec, a_var, b_var, c_var], [[1, 2, 3], [-1, 1, 4], [-2, 3, 4, 5], [-3, 2, 5]]) 
-        return result + bias_var
+        def f(input_vec, a_var, b_var, c_var, bias_var):
+            result = tn.ncon([input_vec, a_var, b_var, c_var], [[1, 2, 3], [-1, 1, 4], [-2, 3, 4, 5], [-3, 2, 5]]) 
+            return result + bias_var
 
-      result = tf.vectorized_map(
-        lambda vec: f(vec, self.a_var, self.b_var, self.c_var, self.bias), inputs
-      )
-      return tf.nn.relu(tf.reshape(result, (-1,64)))
+        result = tf.vectorized_map(
+            lambda vec: f(vec, self.a_var, self.b_var, self.c_var, self.bias), inputs
+        )
+        return tf.nn.relu(tf.reshape(result, (-1,64)))
 
 class fruit_TN2(tf.keras.layers.Layer):
 
